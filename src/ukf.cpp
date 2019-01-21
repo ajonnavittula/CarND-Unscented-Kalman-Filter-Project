@@ -8,12 +8,11 @@ using Eigen::VectorXd;
  * Initializes Unscented Kalman filter
  */
 UKF::UKF() {
+  
   // if this is false, first measurement will be recorded
-
   is_initialized_ = false;
 
   // if this is false, laser measurements will be ignored (except during init)
-  
   use_laser_ = true;
 
   // if this is false, radar measurements will be ignored (except during init)
@@ -55,6 +54,12 @@ UKF::UKF() {
    * End DO NOT MODIFY section for measurement noise values 
    */
   
+  // Augmented state vector
+  x_aug_ = VectorXd(7);
+
+  // Augmented process covariance matrix
+  P_aug_ = MatrixXd::Zero(7, 7);
+
   /**
    * TODO: Complete the initialization. See ukf.h for other member properties.
    * Hint: one or more values initialized above might be wildly off...
@@ -127,11 +132,11 @@ MatrixXd UKF::GenerateSignmaPoints() {
 
   // Get state dimension and set lambda
 
-  int n_x = x.size();
+  n_x = x.size();
 
   double lambda = 3 - n_x;
 
-  // Get P inverse using Cholesky decomposition
+  // Get sqrt of P using Cholesky decomposition
 
   MatrixXd A = P.llt().matrixL();
 

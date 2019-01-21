@@ -102,6 +102,12 @@ class UKF {
 
   // Sigma point spreading parameter
   double lambda_;
+
+  // Augmented state vector
+  Eigen::VectorXd x_aug_;
+
+  // Augmented state covariance matrix
+  Eigen::MatrixXd P_aug_;
 };
 
 #endif  // UKF_H
