@@ -8,7 +8,12 @@ using Eigen::VectorXd;
  * Initializes Unscented Kalman filter
  */
 UKF::UKF() {
+  // if this is false, first measurement will be recorded
+
+  is_initialized_ = false;
+
   // if this is false, laser measurements will be ignored (except during init)
+  
   use_laser_ = true;
 
   // if this is false, radar measurements will be ignored (except during init)
@@ -63,6 +68,90 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
    * TODO: Complete this function! Make sure you switch between lidar and radar
    * measurements.
    */
+
+  // If not initialized, record first measurement
+
+  if (!is_initialized_)
+  {
+    x_ << 1, 1, 1, 1, 1;
+
+    if (meas_package.sensor_type_ == MeasurementPackage::LASER)
+    {
+      
+      // Laser gives position information only
+
+      x_ << meas_package.raw_measurements_[0],
+            meas_package.raw_measurements_[1],
+            0,
+            0,
+            0; 
+    }
+
+    else if (meas_package.sensor_type_ == MeasurementPackage::RADAR)
+    {
+
+      // Convert from polar co-ordinates to cartesian co-ordinates
+
+      double rho = meas_package.raw_measurements_[0];
+      double phi = meas_package.raw_measurements_[1];
+      double rho_dot = meas_package.raw_measurements_[3];
+
+      x_ << rho * cos(phi),
+            rho * sin(phi),
+            rho_dot,
+            phi,
+            0;
+    }
+
+    // Set initial probabilities based on course values
+
+    P_ << 1, 0, 0, 0, 0,
+          0, 1, 0, 0, 0,
+          0, 0, 1000, 0, 0,
+          0, 0, 0, 1000, 0,
+          0, 0, 0, 0, 1;
+
+    is_initialized_ = true;
+
+    return;
+  }
+
+
+
+
+}
+
+// Used implementation from course as a baseline
+
+MatrixXd UKF::GenerateSignmaPoints() {
+
+  // Get state dimension and set lambda
+
+  int n_x = x.size();
+
+  double lambda = 3 - n_x;
+
+  // Get P inverse using Cholesky decomposition
+
+  MatrixXd A = P.llt().matrixL();
+
+  // Create matrix to store sigma points
+  
+  MatrixXd Xsig = MatrixXd(n_x, 2*n_x+1);
+
+  Xsig.col(0) << x_;
+
+  MatrixXd sigmas_ = MatrixXd(n_x, n_x);
+  sigmas_ = sqrt(lambda + n_x)*A;
+
+  for (int i=1; i<n_x+1; i++)
+  {
+    Xsig.col(i) << x + sigmas_.col(i - 1);
+
+    Xsig.col(n_x + i) << x - sigmas_.col(i + n_x - 1);
+  }
+
+  return Xsig;
 }
 
 void UKF::Prediction(double delta_t) {
