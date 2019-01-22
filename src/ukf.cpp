@@ -134,26 +134,40 @@ MatrixXd UKF::GenerateSignmaPoints() {
 
   n_x = x.size();
 
-  double lambda = 3 - n_x;
+  int n_aug = 7;
+
+  double lambda = 3 - n_aug;
+
+  x_aug_.head(5) = x;
+  x_aug_.tail(2) << 0,
+                    0;
+
+  MatrixXd Q = MatrixXd(2,2);
+
+  Q << pow(std_a,2) ,0,
+       0, pow(std_yawdd_,2);
+
+  P_aug_.topLeftCorner(n_x,n_x) = P_;
+  P_aug_.bottomRightCorner(2,2) = Q;
 
   // Get sqrt of P using Cholesky decomposition
 
-  MatrixXd A = P.llt().matrixL();
+  MatrixXd A = P_aug_.llt().matrixL();
 
   // Create matrix to store sigma points
   
-  MatrixXd Xsig = MatrixXd(n_x, 2*n_x+1);
+  MatrixXd Xsig = MatrixXd(n_aug, 2*n_aug+1);
 
-  Xsig.col(0) << x_;
+  Xsig.col(0) << x_aug_;
 
-  MatrixXd sigmas_ = MatrixXd(n_x, n_x);
-  sigmas_ = sqrt(lambda + n_x)*A;
+  MatrixXd sigmas_ = MatrixXd(n_aug, n_aug);
+  sigmas_ = sqrt(lambda + n_aug)*A;
 
-  for (int i=1; i<n_x+1; i++)
+  for (int i=1; i<n_aug+1; i++)
   {
-    Xsig.col(i) << x + sigmas_.col(i - 1);
+    Xsig.col(i) << x_aug_ + sigmas_.col(i - 1);
 
-    Xsig.col(n_x + i) << x - sigmas_.col(i + n_x - 1);
+    Xsig.col(n_aug + i) << x_aug_ - sigmas_.col(i + n_aug - 1);
   }
 
   return Xsig;
@@ -165,6 +179,52 @@ void UKF::Prediction(double delta_t) {
    * Modify the state vector, x_. Predict sigma points, the state, 
    * and the state covariance matrix.
    */
+
+  MatrixXd Xsig_aug = UKF::GenerateSignmaPoints();
+  
+  Xsig_pred_ = MatrixXd(n_x, 2 * n_aug + 1);
+
+  VectorXd x_k = VectorXd(n_aug);
+  VectorXd v = VectorXd(n_x);
+  VectorXd a = VectorXd(n_x);
+  
+  float v_k, psi_k_dot, psi_k, nu_a_k, nu_psi_k; 
+  
+  for (int i = 0; i < 2 * n_aug + 1; i++)
+  {
+      x_k = Xsig_aug.col(i);
+      v_k = x_k(2);
+      psi_k = x_k(3);
+      psi_k_dot = x_k(4);
+      nu_a_k = x_k(5);
+      nu_psi_k = x_k(6);
+      
+      a << 0.5 * nu_a_k * cos(psi_k) * pow(delta_t,2),
+           0.5 * nu_a_k * sin(psi_k) * pow(delta_t,2),
+           delta_t * nu_a_k,
+           0.5 * pow(delta_t,2) * nu_psi_k,
+           delta_t * nu_psi_k;
+      
+      if (psi_k_dot != 0)
+      {
+          v << (sin(psi_k + psi_k_dot * delta_t) - sin(psi_k)) * v_k / psi_k_dot,
+               (-cos(psi_k + psi_k_dot * delta_t) + cos(psi_k)) * v_k / psi_k_dot,
+               0,
+               psi_k_dot * delta_t,
+               0;
+      }
+      else
+      {
+          v << v_k * cos(psi_k) * delta_t,
+               v_k * sin(psi_k) * delta_t,
+               0,
+               psi_k_dot * delta_t,
+               0;
+      }
+      
+      Xsig_pred_.col(i) = x_k.head(5) + v + a;
+  }
+
 }
 
 void UKF::UpdateLidar(MeasurementPackage meas_package) {
