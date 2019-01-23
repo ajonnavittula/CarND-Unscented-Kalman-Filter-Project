@@ -60,6 +60,12 @@ UKF::UKF() {
   // Augmented process covariance matrix
   P_aug_ = MatrixXd::Zero(7, 7);
 
+  n_x_ = 5;
+
+  n_aug_ = 7;
+
+  lambda_ = 3 - n_aug_;
+
   /**
    * TODO: Complete the initialization. See ukf.h for other member properties.
    * Hint: one or more values initialized above might be wildly off...
@@ -112,8 +118,8 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
     P_ << 1, 0, 0, 0, 0,
           0, 1, 0, 0, 0,
-          0, 0, 1000, 0, 0,
-          0, 0, 0, 1000, 0,
+          0, 0, 1, 0, 0,
+          0, 0, 0, 1, 0,
           0, 0, 0, 0, 1;
 
     is_initialized_ = true;
@@ -128,26 +134,20 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
 // Used implementation from course as a baseline
 
-MatrixXd UKF::GenerateSignmaPoints() {
+MatrixXd UKF::GenerateSigmaPoints() {
 
   // Get state dimension and set lambda
 
-  n_x = x.size();
-
-  int n_aug = 7;
-
-  double lambda = 3 - n_aug;
-
-  x_aug_.head(5) = x;
+  x_aug_.head(5) = x_;
   x_aug_.tail(2) << 0,
                     0;
 
   MatrixXd Q = MatrixXd(2,2);
 
-  Q << pow(std_a,2) ,0,
+  Q << pow(std_a_,2) ,0,
        0, pow(std_yawdd_,2);
 
-  P_aug_.topLeftCorner(n_x,n_x) = P_;
+  P_aug_.topLeftCorner(n_x_,n_x_) = P_;
   P_aug_.bottomRightCorner(2,2) = Q;
 
   // Get sqrt of P using Cholesky decomposition
@@ -156,18 +156,18 @@ MatrixXd UKF::GenerateSignmaPoints() {
 
   // Create matrix to store sigma points
   
-  MatrixXd Xsig = MatrixXd(n_aug, 2*n_aug+1);
+  MatrixXd Xsig = MatrixXd(n_aug_, 2*n_aug_+1);
 
   Xsig.col(0) << x_aug_;
 
-  MatrixXd sigmas_ = MatrixXd(n_aug, n_aug);
-  sigmas_ = sqrt(lambda + n_aug)*A;
+  MatrixXd sigmas_ = MatrixXd(n_aug_, n_aug_);
+  sigmas_ = sqrt(lambda_ + n_aug_)*A;
 
-  for (int i=1; i<n_aug+1; i++)
+  for (int i=1; i<n_aug_+1; i++)
   {
     Xsig.col(i) << x_aug_ + sigmas_.col(i - 1);
 
-    Xsig.col(n_aug + i) << x_aug_ - sigmas_.col(i + n_aug - 1);
+    Xsig.col(n_aug_ + i) << x_aug_ - sigmas_.col(i + n_aug_ - 1);
   }
 
   return Xsig;
@@ -180,17 +180,19 @@ void UKF::Prediction(double delta_t) {
    * and the state covariance matrix.
    */
 
-  MatrixXd Xsig_aug = UKF::GenerateSignmaPoints();
+  MatrixXd Xsig_aug = UKF::GenerateSigmaPoints();
   
-  Xsig_pred_ = MatrixXd(n_x, 2 * n_aug + 1);
+  Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);
 
-  VectorXd x_k = VectorXd(n_aug);
-  VectorXd v = VectorXd(n_x);
-  VectorXd a = VectorXd(n_x);
+  VectorXd x_k = VectorXd(n_aug_);
+  VectorXd v = VectorXd(n_x_);
+  VectorXd a = VectorXd(n_x_);
   
   float v_k, psi_k_dot, psi_k, nu_a_k, nu_psi_k; 
   
-  for (int i = 0; i < 2 * n_aug + 1; i++)
+  weights_(0) = lambda_ / (lambda_ + n_aug_);
+
+  for (int i = 0; i < 2 * n_aug_ + 1; i++)
   {
       x_k = Xsig_aug.col(i);
       v_k = x_k(2);
@@ -223,6 +225,10 @@ void UKF::Prediction(double delta_t) {
       }
       
       Xsig_pred_.col(i) = x_k.head(5) + v + a;
+
+      weights_(i) = 0.5 / (lambda_ + n_aug_);
+
+
   }
 
 }
