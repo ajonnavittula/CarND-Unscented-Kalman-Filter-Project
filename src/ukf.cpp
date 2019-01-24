@@ -116,11 +116,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
     // Set initial probabilities based on course values
 
-    P_ << 1, 0, 0, 0, 0,
-          0, 1, 0, 0, 0,
-          0, 0, 1, 0, 0,
-          0, 0, 0, 1, 0,
-          0, 0, 0, 0, 1;
+    P_ = MatrixXd::Identity(7, 7);
 
     is_initialized_ = true;
 
@@ -227,8 +223,27 @@ void UKF::Prediction(double delta_t) {
       Xsig_pred_.col(i) = x_k.head(5) + v + a;
 
       weights_(i) = 0.5 / (lambda_ + n_aug_);
+  }
 
+  // Update state vector with predictions
 
+  x_.fill(0.);
+
+  for(int i = 0; i < n_x; i++)
+  {
+    x_(i) = weights_.dot(Xsig_pred_.row(i));
+  }
+
+  P.fill(0.);
+
+  for(int i = 0; i < 2 * n_aug + 1; i++)
+  {
+    VectorXd x_diff = Xsig_pred_.col(i) - x_;
+    
+    while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
+    while (x_diff(3)<-M_PI) x_diff(3)+=2.*M_PI;
+
+    P_ = P_ + weights(i) * x_diff * x_diff.transpose() ;
   }
 
 }
@@ -240,6 +255,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
    * covariance, P_.
    * You can also calculate the lidar NIS, if desired.
    */
+
 }
 
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
@@ -249,4 +265,52 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
    * covariance, P_.
    * You can also calculate the radar NIS, if desired.
    */
+  MatrixXd Zsig = MatrixXd(n_z, 2 * n_aug + 1);
+
+  // mean predicted measurement
+  VectorXd z_pred = VectorXd(n_z);
+  
+  // measurement covariance matrix S
+  MatrixXd S = MatrixXd(n_z,n_z); 
+
+  float p_x, p_y, v, psi, psi_dot, rho, rho_dot, phi;
+  
+  for (int i = 0; i < 2 * n_aug + 1; i++)
+  {
+      p_x = Xsig_pred_.col(i)[0];
+      p_y = Xsig_pred_.col(i)[1];
+      v = Xsig_pred_.col(i)[2];
+      psi = Xsig_pred_.col(i)[3];
+      psi_dot = Xsig_pred_.col(i)[4];
+      
+      rho = sqrt(p_x * p_x + p_y * p_y);
+      phi = atan2(p_y,p_x);
+      rho_dot = 1/rho * (p_x * v * cos(psi) + p_y * v * sin(psi));
+      
+      Zsig.col(i) << rho,
+                     phi,
+                     rho_dot;
+  }
+  
+  // calculate mean predicted measurement
+  
+  z_pred.fill(0.);
+  for(int i = 0; i < 2 * n_aug + 1; i++)
+  {
+      z_pred = z_pred + weights(i) * Zsig.col(i);
+  }
+  // calculate innovation covariance matrix S
+  MatrixXd R = MatrixXd(3,3);
+  R << std_radr * std_radr, 0, 0,
+       0, std_radphi * std_radphi, 0,
+       0, 0, std_radrd * std_radrd;
+       
+  S.fill(0.);       
+  for (int i =0; i <2 * n_aug + 1; i++)
+  {
+      S = S + weights(i) * (Zsig.col(i) - z_pred) * (Zsig.col(i) - z_pred).transpose();
+  }
+  
+  S = S + R;
+
 }
