@@ -1,7 +1,10 @@
 #include "tools.h"
+#include <iostream>
 
 using Eigen::VectorXd;
 using std::vector;
+using std::cout;
+using std::endl;
 
 Tools::Tools() {}
 
@@ -14,11 +17,11 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
 
   if (estimations.size() != ground_truth.size() || estimations.size() == 0)
   {
-  	std::cout << "Invalid estimations size" << std::endl;
+  	cout << "Invalid estimations size" << endl;
   	return rmse;
   }
 
-  for (int i=0; i<estimations.size(); i++)
+  for (unsigned int i = 0; i < estimations.size(); i++)
   {
   	VectorXd residuals = estimations[i] - ground_truth[i];
 
@@ -29,6 +32,8 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
   rmse = rmse/estimations.size();
 
   rmse = rmse.array().sqrt();
+
+  cout << "Calculated RMSE :" << rmse << endl;
 
   return rmse;
 }

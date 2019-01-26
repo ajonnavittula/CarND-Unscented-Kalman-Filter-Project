@@ -47,8 +47,6 @@ class UKF {
    * @param P The process covariance matrix
    */
 
-  Eigen::MatrixXd GenerateSigmaPoints();
-
   // initially set to false, set to true in first call of ProcessMeasurement
   bool is_initialized_;
 
@@ -99,6 +97,9 @@ class UKF {
 
   // Augmented state dimension
   int n_aug_;
+
+  // Measurement state dimension
+  int n_z_;
 
   // Sigma point spreading parameter
   double lambda_;
