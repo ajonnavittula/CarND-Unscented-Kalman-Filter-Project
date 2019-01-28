@@ -102,14 +102,8 @@ class UKF {
   // Measurement state dimension
   int n_z_;
 
-  // Sigma point spreading parameter
-  double lambda_;
-
-  // Augmented state vector
-  Eigen::VectorXd x_aug_;
-
-  // Augmented state covariance matrix
-  Eigen::MatrixXd P_aug_;
+  // Debug parameter
+  bool debug_; 
 };
 
 #endif  // UKF_H

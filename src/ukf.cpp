@@ -25,10 +25,10 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 2;
+  std_a_ = 1.5;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 2;
+  std_yawdd_ = 0.5;
   
   /**
    * DO NOT MODIFY measurement noise values below.
@@ -53,6 +53,8 @@ UKF::UKF() {
   /**
    * End DO NOT MODIFY section for measurement noise values 
    */
+  // Set time stamp to zero
+  time_us_ = 0;
 
   // Number of states
   n_x_ = 5;
@@ -66,10 +68,8 @@ UKF::UKF() {
   // Weights vector initialization
   weights_ = VectorXd(2 * n_aug_ + 1);
 
-  /**
-   * TODO: Complete the initialization. See ukf.h for other member properties.
-   * Hint: one or more values initialized above might be wildly off...
-   */
+  // Debug parameter, set to print steps during runtime
+  debug_ = false;
 }
 
 UKF::~UKF() {}
@@ -93,9 +93,9 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
       x_ << meas_package.raw_measurements_[0],
             meas_package.raw_measurements_[1],
+            4,
             0,
-            0,
-            0; 
+            0;
     }
 
     else if (meas_package.sensor_type_ == MeasurementPackage::RADAR)
@@ -105,28 +105,27 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
       double rho = meas_package.raw_measurements_[0];
       double phi = meas_package.raw_measurements_[1];
-      double rho_dot = meas_package.raw_measurements_[2];
+      //double rho_dot = meas_package.raw_measurements_[2];
 
       x_ << rho * cos(phi),
             rho * sin(phi),
-            rho_dot,
+            4,
             0,
             0;
     }
 
-    // Set initial probabilities based on course suggestions
-
+    // Set initial covariance based on course suggestions
     P_ << 1, 0, 0, 0, 0,
           0, 1, 0, 0, 0,
           0, 0, 1, 0, 0,
-          0, 0, 0, 1, 0,
-          0, 0, 0, 0, 1;
+          0, 0, 0, 0.1, 0,
+          0, 0, 0, 0, 0.1; 
 
     time_us_ = meas_package.timestamp_;
 
     is_initialized_ = true;
 
-    std::cout << "Initiaization complete" << std::endl;
+    if (debug_) std::cout << "Initiaization complete" << std::endl;
 
     return;
   }
@@ -137,23 +136,22 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
   // Run prediction step to update state and covariance
 
-  std::cout << "Running prediction" << std::endl;
+  if (debug_) std::cout << "Running prediction" << std::endl;
   Prediction(delta_t);
-
-  // Set current time stamp
-
-  time_us_ = meas_package.timestamp_;
   
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
    
-   std::cout << "Radar measurement received" << std::endl;
+   if (debug_) std::cout << "Radar measurement received" << std::endl;
    UpdateRadar(meas_package); 
   }
   
   else if ( meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_ ) { 
-    std::cout << "Lidar complete" << std::endl;
+    if (debug_) std::cout << "Lidar complete" << std::endl;
     UpdateLidar(meas_package); 
   }
+
+  // Set current time stamp
+  time_us_ = meas_package.timestamp_;
 
 }
 
@@ -182,7 +180,7 @@ void UKF::Prediction(double delta_t) {
   MatrixXd P_aug = MatrixXd::Zero(n_aug_, n_aug_);
 
   // Spreading factor for sigma point calculation
-  int lambda = 3 - n_aug_;
+  double lambda = 3. - n_aug_;
   
   // Process noise matrix for augmentation
   MatrixXd Q = MatrixXd(2,2);
@@ -198,7 +196,7 @@ void UKF::Prediction(double delta_t) {
   P_aug.topLeftCorner(n_x_, n_x_) = P_;
   P_aug.bottomRightCorner(2,2) = Q;
 
-  std::cout << "Prediction step 1 complete" << std::endl;
+  if (debug_) std::cout << "Prediction step 1 complete" << std::endl;
   /**********************************
    **Step 2: Calculate Sigma points**
    *********************************/
@@ -220,7 +218,7 @@ void UKF::Prediction(double delta_t) {
     Xsig_aug.col(n_aug_ + i) = x_aug - sigmas.col(i - 1);
   }
   
-  std::cout << "Prediction step 2 complete" << std::endl;
+  if (debug_) std::cout << "Prediction step 2 complete" << std::endl;
   /**********************************
    **Step 3: Sigma point prediction**
    *********************************/
@@ -252,7 +250,7 @@ void UKF::Prediction(double delta_t) {
          0.5 * delta_t_2 * nu_psi_k,
          delta_t * nu_psi_k;
 
-    if (psi_k_dot > 0.01) {
+    if (fabs(psi_k_dot) > 0.01) {
   
       v << v_k / psi_k_dot * (sin(psi_k + psi_k_dot*delta_t) - sin(psi_k)),
       v_k / psi_k_dot * (-cos(psi_k + psi_k_dot*delta_t) + cos(psi_k)),
@@ -278,7 +276,7 @@ void UKF::Prediction(double delta_t) {
     }
   }
 
-  std::cout << "Prediction step 3 complete" << std::endl;
+  if (debug_) std::cout << "Prediction step 3 complete" << std::endl;
   /*************************************************
    **Step 4: mean state and covariance calculation**
    ************************************************/
@@ -301,7 +299,7 @@ void UKF::Prediction(double delta_t) {
 
     
   }
-  std::cout << "Prediction step 4 complete" << std::endl;
+  if (debug_) std::cout << "Prediction step 4 complete" << std::endl;
 
 }
 
@@ -341,7 +339,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   z << meas_package.raw_measurements_[0],
        meas_package.raw_measurements_[1];
 
-  std::cout << "UpdateLidar step 1 complete" << std::endl;
+  if (debug_) std::cout << "UpdateLidar step 1 complete" << std::endl;
   /*********************************
    **Step 2: Calculate Kalman gain**
    ********************************/
@@ -353,7 +351,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   MatrixXd Si = S.inverse();
   MatrixXd K = P_ * Ht * Si;
 
-  std::cout << "Update Lidar step 2 complete" << std::endl;
+  if (debug_) std::cout << "Update Lidar step 2 complete" << std::endl;
   /***************************************
    **Step 3: Update state and covaraince**
    **************************************/
@@ -362,7 +360,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   MatrixXd I =  MatrixXd::Identity(n_x_,n_x_);
   P_ = (I - K * H) * P_;
 
-  std::cout << "Update Lidar step 3 complete" << std::endl;
+  if (debug_) std::cout << "Update Lidar step 3 complete" << std::endl;
 }
 
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
@@ -393,7 +391,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
        meas_package.raw_measurements_[2];
 
   // Some helpful variables
-  float p_x, p_y, v, psi, rho, rho_dot, phi;
+  double p_x, p_y, v, psi, rho, rho_dot, phi;
 
   VectorXd z_pred = VectorXd::Zero(n_z_);
 
@@ -430,8 +428,6 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   S.fill(0.);
   for ( int i = 0; i < 2 * n_aug_ + 1; i++) {
 
-    S = S + weights_(i) * (Zsig.col(i) - z_pred) * (Zsig.col(i) - z_pred).transpose();
-
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
     VectorXd z_diff = Zsig.col(i) - z_pred;
 
@@ -441,11 +437,13 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     while (z_diff(1) > M_PI) z_diff(1)-=2.*M_PI;
     while (z_diff(1) < -M_PI) z_diff(1)+=2.*M_PI;
 
+    S = S + weights_(i) * z_diff * z_diff.transpose();
+
     Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
   }
 
   S += R;
-  std::cout << "UpdateRadar steps 1,2 and 3 part 1 complete" << std::endl;
+  if (debug_) std::cout << "UpdateRadar steps 1,2 and 3 part 1 complete" << std::endl;
   /*****************************************************************
    **Step 3, part 2: Update state and covariance using Kalman gain**
    ****************************************************************/
@@ -460,5 +458,5 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
   P_ = P_ - K * S * K.transpose();
 
-  std::cout << "UpdateRadar step 3 part 2 complete" << std::endl;
+  if (debug_) std::cout << "UpdateRadar step 3 part 2 complete" << std::endl;
 }
